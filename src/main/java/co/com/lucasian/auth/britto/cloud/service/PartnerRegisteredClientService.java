@@ -75,7 +75,7 @@ public class PartnerRegisteredClientService implements RegisteredClientRepositor
 
     private TokenSettings tokenSettings(){
         return TokenSettings.builder()
-                .accessTokenTimeToLive(Duration.ofHours(8))
+                .accessTokenTimeToLive(Duration.ofMinutes(1))
                 .build();                
     }
     

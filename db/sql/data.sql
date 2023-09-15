@@ -28,5 +28,5 @@ values ('debuggeandoideas',
             'read,write',
             'authorization_code,refresh_token',
             'client_secret_basic,client_secret_jwt',
-            'https://oauthdebugger.com/debug',
+            'http://localhost:9000/authorized',
             'https://springone.io/authorized')
