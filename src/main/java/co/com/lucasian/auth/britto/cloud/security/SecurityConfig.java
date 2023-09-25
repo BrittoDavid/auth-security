@@ -10,6 +10,7 @@ import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
@@ -25,11 +26,17 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.core.AuthorizationGrantType;
+import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
+import org.springframework.security.oauth2.server.authorization.client.InMemoryRegisteredClientRepository;
+import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
+import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
 import org.springframework.security.oauth2.server.authorization.config.annotation.web.configurers.OAuth2AuthorizationServerConfigurer;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
+import org.springframework.security.oauth2.server.authorization.settings.TokenSettings;
 import org.springframework.security.oauth2.server.authorization.token.JwtEncodingContext;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenCustomizer;
 import org.springframework.security.web.SecurityFilterChain;
@@ -69,7 +76,7 @@ public class SecurityConfig {
     @Bean
     SecurityFilterChain PublicSecurityFilterChain(HttpSecurity http ) throws Exception {
       
-        http.formLogin(Customizer.withDefaults());
+        http.formLogin(Customizer.withDefaults()).csrf(csrf -> csrf.disable());
         http.authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
         http.oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
         
@@ -112,19 +119,37 @@ public class SecurityConfig {
     OAuth2TokenCustomizer<JwtEncodingContext> oAuth2TokenCustomizer(){
         return context ->{
             var authentication = context.getPrincipal();
-            var authoriries = authentication.getAuthorities().stream()
+            var authorities = authentication.getAuthorities().stream()
                     .map(GrantedAuthority::getAuthority)
-                    .collect(Collectors.toSet());
-            
-            if (context.getTokenType().equals(OAuth2TokenType.ACCESS_TOKEN)) {
+                    .collect(Collectors.toSet());            
+            if (context.getTokenType().equals(OAuth2TokenType.ACCESS_TOKEN) ||  context.getTokenType().equals(OAuth2TokenType.REFRESH_TOKEN)) {
                 context.getClaims().claims(claim -> 
                         claim.putAll(Map.of(
-                                "roles", authoriries,
+                                "roles", authorities,
                                 "owner", APPLICATION_OWNER,
                                 "date_request",LocalDateTime.now().toString())));
             }
         };
-    }           
+    }
+    
+    @Bean
+    RegisteredClientRepository registeredClient(){
+         RegisteredClient registeredClient = RegisteredClient.withId(UUID.randomUUID().toString())
+                 .clientId("debuggeandoideas")
+                 .clientSecret("$2a$10$v2jjQdxObou5FktwHIaTvOZGxThhIyDu28U8z5b8Jku1TemjUuwO2")
+                 .clientName("debuggeando ideas")
+                 .redirectUri("http://localhost:9000/authorized")                 
+                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)                                 
+                 .scope("read")
+                 .scope("write")
+                 .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)          
+                 .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
+                 .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS) 
+                 .tokenSettings(this.tokenSettings())
+                 .build();
+         
+         return new InMemoryRegisteredClientRepository(registeredClient);      
+    }
     
     private static KeyPair generateRSA(){
         KeyPair keyPair = null;
@@ -143,6 +168,12 @@ public class SecurityConfig {
         var publicKey = (RSAPublicKey) keyPair.getPublic();
         var privateKey = (RSAPrivateKey) keyPair.getPrivate();
         return new RSAKey.Builder(publicKey).privateKey(privateKey).keyID(UUID.randomUUID().toString()).build();
+    }
+    
+     private TokenSettings tokenSettings(){
+        return TokenSettings.builder()
+                .accessTokenTimeToLive(Duration.ofMinutes(1))
+                .build();                
     }
     
 }
